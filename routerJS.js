@@ -469,16 +469,16 @@
     }
 
     if(routerJS.history) {
-        var _historyPushStatus = History.prototype.pushStatus,
-        _historyReplaceStatus = History.prototype.replaceStatus;
+        var _historyPushStatus = History.prototype.pushState,
+        _historyReplaceState = History.prototype.replaceState;
 
-        History.prototype.pushStatus = function() {
-            _historyPushStatus.apply(this, arguments);
+        History.prototype.pushState = function() {
+            _historyPushState.apply(this, arguments);
             routerJS.load();
         };
 
-        History.prototype.replaceStatus = function() {
-            _historyReplaceStatus.apply(this, arguments);
+        History.prototype.replaceState = function() {
+            _historyReplaceState.apply(this, arguments);
             routerJS.load();
         };
     }
