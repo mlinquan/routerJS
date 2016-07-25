@@ -125,10 +125,122 @@
         return target;
     }
 
+    /**
+     * Match matching groups in a regular expression.
+     */
+    var MATCHING_GROUP_REGEXP = /\((?!\?)/g;
+
+    /**
+     * Normalize the given path string,
+     * returning a regular expression.
+     *
+     * An empty array should be passed,
+     * which will contain the placeholder
+     * key names. For example "/user/:id" will
+     * then contain ["id"].
+     *
+     * @param  {String|RegExp|Array} path
+     * @param  {Array} keys
+     * @param  {Object} options
+     * @return {RegExp}
+     * @api private
+     */
+
+    function pathtoRegexp(path, keys, options) {
+      options = options || {};
+      keys = keys || [];
+      var strict = options.strict;
+      var end = options.end !== false;
+      var flags = options.sensitive ? '' : 'i';
+      var extraOffset = 0;
+      var keysOffset = keys.length;
+      var i = 0;
+      var name = 0;
+      var m;
+
+      if (path instanceof RegExp) {
+        while (m = MATCHING_GROUP_REGEXP.exec(path.source)) {
+          keys.push({
+            name: name++,
+            optional: false,
+            offset: m.index
+          });
+        }
+
+        return path;
+      }
+
+      if (isArray(path)) {
+        // Map array parts into regexps and return their source. We also pass
+        // the same keys and options instance into every generation to get
+        // consistent matching groups before we join the sources together.
+        path = path.map(function (value) {
+          return pathtoRegexp(value, keys, options).source;
+        });
+
+        return new RegExp('(?:' + path.join('|') + ')', flags);
+      }
+
+      path = ('^' + path + (strict ? '' : path[path.length - 1] === '/' ? '?' : '/?'))
+        .replace(/\/\(/g, '/(?:')
+        .replace(/([\/\.])/g, '\\$1')
+        .replace(/(\\\/)?(\\\.)?:(\w+)(\(.*?\))?(\*)?(\?)?/g, function (match, slash, format, key, capture, star, optional, offset) {
+          slash = slash || '';
+          format = format || '';
+          capture = capture || '([^\\/' + format + ']+?)';
+          optional = optional || '';
+
+          keys.push({
+            name: key,
+            optional: !!optional,
+            offset: offset + extraOffset
+          });
+
+          var result = ''
+            + (optional ? '' : slash)
+            + '(?:'
+            + format + (optional ? slash : '') + capture
+            + (star ? '((?:[\\/' + format + '].+?)?)' : '')
+            + ')'
+            + optional;
+
+          extraOffset += result.length - match.length;
+
+          return result;
+        })
+        .replace(/\*/g, function (star, index) {
+          var len = keys.length
+
+          while (len-- > keysOffset && keys[len].offset > index) {
+            keys[len].offset += 3;
+          }
+
+          return '(.*)';
+        });
+
+      // This is a workaround for handling unnamed matching groups.
+      while (m = MATCHING_GROUP_REGEXP.exec(path)) {
+        if (keysOffset + i === keys.length || keys[keysOffset + i].offset > m.index) {
+          keys.splice(keysOffset + i, 0, {
+            name: name++, // Unnamed matching groups must be consistently linear.
+            optional: false,
+            offset: m.index
+          });
+        }
+
+        i++;
+      }
+
+      // If the path is non-ending, match until the end or a slash.
+      path += (end ? '$' : (path[path.length - 1] === '/' ? '' : '(?=\\/|$)'));
+
+      return new RegExp(path, flags);
+    }
+
     //One router act on one service(domainname)
     var routerJS = function(domain) {
         if(!domain) {
-            domain = '.';
+            domain = host;
         }
         if(!routerJS[domain]) {
             routerJS[domain] = new routerJS.init(domain);
@@ -187,13 +299,29 @@
                 }
             }
         },
+        makeThisPage: function() {
+            var pathname = location.pathname;
+            eachProp(this.router, function(route, path) {
+                var pathReg = pathtoRegexp(path);
+                console.log(pathReg);
+                console.log(pathReg.exec(pathname));
+            });
+        },
         run: function() {
-            
+            this.makeMap();
+            this.load();
+        },
+        load: function() {
+            this.makeThisPage();
         }
     };
 
     mixin(routerJS, {
         debug: false,
+
+        isVirgin: true,
+
+        history: false,
 
         error: function(msg) {
             throw new Error( msg );
@@ -217,7 +345,7 @@
             return element;
         },
 
-        createCSS: function() {
+        createCSS: function(obj) {
             var element;
             if(obj.source) {
                 if(document.createStyleSheet) {
@@ -313,6 +441,11 @@
                     }
                 }
             });
+        },
+
+        load: function() {
+            var domain = location.domain;
+            return routerJS[domain].load();
         }
 
     });
@@ -335,6 +468,21 @@
         window.routerJS = window.RJS = routerJS;
     }
 
+    if(routerJS.history) {
+        var _historyPushStatus = History.prototype.pushStatus,
+        _historyReplaceStatus = History.prototype.replaceStatus;
+
+        History.prototype.pushStatus = function() {
+            _historyPushStatus.apply(this, arguments);
+            routerJS.load();
+        };
+
+        History.prototype.replaceStatus = function() {
+            _historyReplaceStatus.apply(this, arguments);
+            routerJS.load();
+        };
+    }
+
     return routerJS;
 
 }));
@@ -343,13 +491,14 @@
 * routerJS.org service
 */
 
+
+routerJS.history = true;
+
 var service1 = routerJS('routerjs.org');
 
 service1.config({
-    jsPath: '//static.hexindai.com/js/',// Is local.
-    cssPath: '//static.routerjs.org/css/',// Is remote, Must set 'Access-Control-Allow-Origin' header.
-    tplPath: '/tpl/',// Is local.
-    apiPath: '//api.routerjs.org/',// Is remote, Must set 'Access-Control-Allow-Origin' header.
+    jsPath: '//static.hexindai.com/lv2/js/',
+    cssPath: '//static.hexindai.com/lv2/css/',// Is remote, Must set 'Access-Control-Allow-Origin' header.
     jsMap: {
 
         //Libray and plugin
@@ -374,21 +523,40 @@ service1.config({
                 path: "react-dom.min.js",
                 require: "react"
             },
-
+        //Libs
+        "common": {
+            path: "common.js",
+            lib: true
+        },
         //Sub page
-        "home": {
-            path: "home.js",
-            require: ["react-dom", "common"]
+        "index": {
+            path: "index.js"
         },
-        "login": {
-            path: "login.js",
-            require: ["react-dom", "common", "jquery.validate.additional"]
+        "bids": {
+            path: "bids.js",
+            when: function() {
+                return routerJS.isVirgin;
+            }
         },
-        "join": {
-            path: "join.js",
-            require: ["react-dom", "common", "jquery.validate.additional"]
+        "packages": {
+            path: "packages.js",
+            when: function() {
+                return routerJS.isVirgin;
+            }
+        },
+        "transferred": {
+            path: "transferred.js",
+            when: function() {
+                return routerJS.isVirgin;
+            }
         }
 
+    },
+    cb: function() {
+        var pathname = location.pathname;
+        if($callbacks[pathname] && $.isFunction($callbacks[pathname])) {
+            return $callbacks[pathname]();
+        } 
     }
 });
 
@@ -396,23 +564,31 @@ service1.set('*', {
     'js': 'common',
     'css': 'common.css'
 });
-service1.set('/|/index.html', {
-    'js': 'home',
-    'css': 'home.css',
-    'tpl': 'home.tpl',
-    'api': ['home/banner', 'home/news']
+service1.set('/', {
+    'js': 'index',
+    'css': 'index.css'
 });
-service1.set('/login', {
-    'js': 'login',
-    'css': 'login.css',
-    'tpl': 'login.tpl'
+service1.set('/bids|/packages|/transferred', {
+    'css': 'invest.css'
 });
-service1.set('/join', {
-    'js': 'join',
-    'css': 'join.css',
-    'tpl': 'join.tpl'
+service1.set('/bids', {
+    'js': {
+        path: 'invest.js',
+        require: 'bids'
+    }
 });
-
-service1.makeMap();
+service1.set('/packages', {
+    'js': {
+        path: 'invest.js',
+        require: 'packages'
+    }
+});
+service1.set('/transferred', {
+    'js': {
+        path: 'invest.js',
+        require: 'transferred'
+    }
+});
+service1.run();
 
 console.log(routerJS["routerjs.org"]);
