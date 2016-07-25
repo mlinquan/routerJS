@@ -254,6 +254,21 @@
             this.fileMap = {};
             this.map = {};
             this.config = mixin({}, options);
+            if(routerJS.history) {
+                console.log('111');
+                var _historyPushState = History.prototype.pushState,
+                _historyReplaceState = History.prototype.replaceState;
+
+                History.prototype.pushState = function() {
+                    _historyPushState.apply(this, arguments);
+                    routerJS.load();
+                };
+
+                History.prototype.replaceState = function() {
+                    _historyReplaceState.apply(this, arguments);
+                    routerJS.load();
+                };
+            }
         },
         set: function(path, options) {
             this.router[path] = options;
@@ -444,7 +459,7 @@
         },
 
         load: function() {
-            var domain = location.domain;
+            var domain = location.hostname;
             return routerJS[domain].load();
         }
 
@@ -468,21 +483,6 @@
         window.routerJS = window.RJS = routerJS;
     }
 
-    if(routerJS.history) {
-        var _historyPushStatus = History.prototype.pushState,
-        _historyReplaceState = History.prototype.replaceState;
-
-        History.prototype.pushState = function() {
-            _historyPushState.apply(this, arguments);
-            routerJS.load();
-        };
-
-        History.prototype.replaceState = function() {
-            _historyReplaceState.apply(this, arguments);
-            routerJS.load();
-        };
-    }
-
     return routerJS;
 
 }));
@@ -494,7 +494,7 @@
 
 routerJS.history = true;
 
-var service1 = routerJS('routerjs.org');
+var service1 = routerJS();
 
 service1.config({
     jsPath: '//static.hexindai.com/lv2/js/',
