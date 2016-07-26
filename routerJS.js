@@ -49,7 +49,11 @@ console.time('123');
     hasOwn = op.hasOwnProperty,
     cssExt = /\.css$/,
     jsExt = /\.js$/,
-    thisTimeUse = {};
+    thisTimeUse = {},
+    queue = {
+        libs: [],
+        js: []
+    };
 
     function isRemote(path) {
         var _link_tmp = document.createElement('a');
@@ -330,6 +334,7 @@ console.time('123');
             var fileMap = mixin({}, this.fileMap);
 
             thisTimeUse = {};
+            thisTimeLibs = {};
 
             eachProp(router, function(route, path) {
                 var pathReg = pathtoRegexp(path);
@@ -419,8 +424,26 @@ console.time('123');
             });
 
             eachProp(thisTimeUse, function(jsObj, name) {
-                console.log(jsObj);
+                if(jsObj.lib) {
+                    queue.libs.push(name);
+                    return;
+                }
+                queue.js.push(name);
             });
+
+            if(queue.libs.length) {
+                each(queue.libs, function(jsname) {
+                    routerJS.push(jsname, function() {
+                        each(queue.js, function(jsname) {
+                            routerJS.push(jsname);
+                        });
+                    });
+                });
+            } else {
+                each(queue.js, function(jsname) {
+                    routerJS.push(jsname);
+                });
+            }
 
             /* Load CSS */
             each(routerJS.loadedCSS, function(loadedCSS) {
@@ -584,8 +607,26 @@ console.time('123');
             }
         },
 
-        push: function(name) {
-            console.log(thisTimeUse[name]);
+        push: function(name, cb) {
+            routerJS.get(thisTimeUse[name], function(obj, error) {
+                if(obj) {
+                    routerJS.setStorage(obj);
+                    if(obj.require.length) {
+                        return;
+                    }
+                    routerJS.loadedJS[name] = routerJS.createJS(obj);
+                    head.appendChild(routerJS.loadedCSS[cssName]);
+                    if(thisTimeUse[name].children) {
+                        each(thisTimeUse[name].children, function(childrenName) {
+                            routerJS.push(childrenName);
+                        });
+                    }
+                    delete thisTimeUse[name];
+                    if(cb && isFunction(cb)) {
+                        cb();
+                    }
+                }
+            });
         },
 
         load: function() {
