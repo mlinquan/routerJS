@@ -424,8 +424,16 @@ console.time('123');
             });
 
             eachProp(thisTimeUse, function(jsObj, name) {
+                if(queue.lib.indexOf(name) != -1 || queue.js.indexOf(name) != -1) {
+                    return;
+                }
                 if(jsObj.lib) {
                     queue.libs.push(name);
+                    if(jsObj.require && jsObj.require.length) {
+                        each(jsObj.require, function(requireName) {
+                            queue.libs.push(requireName);
+                        });
+                    }
                     return;
                 }
                 queue.js.push(name);
