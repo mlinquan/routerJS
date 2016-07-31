@@ -1,4 +1,3 @@
-console.time('123');
 /*!
  * routerJS
  * http://routerjs.com/
@@ -10,6 +9,37 @@ console.time('123');
  *
  * Copycat: LinQuan
  */
+
+if (!Array.prototype.indexOf)
+{
+  Array.prototype.indexOf = function(elt /*, from*/)
+  {
+    var len = this.length >>> 0;
+    var from = Number(arguments[1]) || 0;
+    from = (from < 0)
+         ? Math.ceil(from)
+         : Math.floor(from);
+    if (from < 0)
+      from += len;
+    for (; from < len; from++)
+    {
+      if (from in this &&
+          this[from] === elt)
+        return from;
+    }
+    return -1;
+  };
+}
+
+if(!Array.prototype.remove) {
+    Array.prototype.remove = function(item) {
+        var i = this.indexOf(item);
+        if(i === -1) {
+            return;
+        }
+        this.splice(i, 1);
+    };
+}
 
 //Factory mode copy form jQuery.
 (function( global, factory ) {
@@ -36,33 +66,29 @@ console.time('123');
 
 // Pass this if window is not defined yet
 }(typeof window !== "undefined" ? window : this, function( window, noGlobal ) {
-    var lteIE8 = eval(!-[1,]),
-    gteIE8 = (typeof window.localStorage != 'undefined'),
-    isIE8 = (lteIE8 && gteIE8),
-    ltIE8 = (lteIE8 && !isIE8),
-    head = document.head || document.getElementsByTagName('head')[0],
+    var head = document.head || document.getElementsByTagName('head')[0],
     local = location,
     host = local.hostname,
-    protocol = local.protocol,
     op = Object.prototype,
     ostring = op.toString,
     hasOwn = op.hasOwnProperty,
-    cssExt = /\.css$/,
-    jsExt = /\.js$/,
+    ext = {
+      css: /\.css([\#\?]{1}.*)?$/,
+      js: /\.js([\#\?]{1}.*)?$/
+    },
     thisTimeUse = {},
-    queue = {
-        libs: [],
-        js: []
-    };
-
-    var getProto = Object.getPrototypeOf;
-    var fnToString = hasOwn.toString;
-    var ObjectFunctionString = fnToString.call( Object );
+    queue = [];
 
     function isRemote(path) {
         var _link_tmp = document.createElement('a');
         _link_tmp.href = path;
-        return _link_tmp.hostname != location.hostname;
+        return _link_tmp.hostname != host;
+    }
+
+    function isRedirect(path) {
+        var _link_tmp = document.createElement('a');
+        _link_tmp.href = path;
+        return _link_tmp.pathname != location.pathname;
     }
 
     function isString(it) {
@@ -124,117 +150,39 @@ console.time('123');
      * Simple function to mix in properties from source into target,
      * but only if target does not already have a property of the same name.
      */
-    function mixin(target, source, force, deepStringMixin) {
-        if (source) {
-            eachProp(source, function (value, prop) {
-                if (force || !hasProp(target, prop)) {
-                    if (deepStringMixin && typeof value === 'object' && value &&
-                        !isArray(value) && !isFunction(value) &&
-                        !(value instanceof RegExp)) {
+    function extend(target) {
+        for (var _len2 = arguments.length, args = Array(_len2 > 1 ? _len2 - 1 : 0), _key2 = 1; _key2 < _len2; _key2++) {
+        args[_key2 - 1] = arguments[_key2];
+        }
 
-                        if (!target[prop]) {
-                            target[prop] = {};
-                        }
-                        mixin(target[prop], value, force, deepStringMixin);
-                    } else {
-                        target[prop] = value;
-                    }
-                }
-            });
+        target = target || {};
+        var i = 0,
+          length = args.length,
+          options = undefined,
+          name = undefined,
+          src = undefined,
+          copy = undefined;
+        for (; i < length; i++) {
+        options = args[i];
+        if (!options) {
+          continue;
+        }
+        for (name in options) {
+          src = target[name];
+          copy = options[name];
+          if (src && src === copy) {
+            continue;
+          }
+          if (isObject(copy)) {
+            target[name] = extend(src && isObject(src) ? src : {}, copy);
+          } else if (isArray(copy)) {
+            target[name] = extend([], copy);
+          } else {
+            target[name] = copy;
+          }
+        }
         }
         return target;
-    }
-
-    function extend() {
-        var options, name, src, copy, copyIsArray, clone,
-            target = arguments[ 0 ] || {},
-            i = 1,
-            length = arguments.length,
-            deep = false;
-
-        // Handle a deep copy situation
-        if ( typeof target === "boolean" ) {
-            deep = target;
-
-            // Skip the boolean and the target
-            target = arguments[ i ] || {};
-            i++;
-        }
-
-        // Handle case when target is a string or something (possible in deep copy)
-        if ( typeof target !== "object" && !isFunction( target ) ) {
-            target = {};
-        }
-
-        // Extend jQuery itself if only one argument is passed
-        if ( i === length ) {
-            target = this;
-            i--;
-        }
-
-        for ( ; i < length; i++ ) {
-
-            // Only deal with non-null/undefined values
-            if ( ( options = arguments[ i ] ) != null ) {
-
-                // Extend the base object
-                for ( name in options ) {
-                    src = target[ name ];
-                    copy = options[ name ];
-
-                    // Prevent never-ending loop
-                    if ( target === copy ) {
-                        continue;
-                    }
-
-                    // Recurse if we're merging plain objects or arrays
-                    if ( deep && copy && ( isPlainObject( copy ) ||
-                        ( copyIsArray = isArray( copy ) ) ) ) {
-
-                        if ( copyIsArray ) {
-                            copyIsArray = false;
-                            clone = src && isArray( src ) ? src : [];
-
-                        } else {
-                            clone = src && isPlainObject( src ) ? src : {};
-                        }
-
-                        // Never move original objects, clone them
-                        target[ name ] = extend( deep, clone, copy );
-
-                    // Don't bring in undefined values
-                    } else if ( copy !== undefined ) {
-                        target[ name ] = copy;
-                    }
-                }
-            }
-        }
-
-        // Return the modified object
-        return target;
-    }
-
-    console.log(extend({}, {a: "b"}));
-
-    function isPlainObject( obj ) {
-        var proto, Ctor;
-
-        // Detect obvious negatives
-        // Use toString instead of jQuery.type to catch host objects
-        if ( !obj || !isObject( obj ) ) {
-            return false;
-        }
-
-        proto = getProto( obj );
-
-        // Objects with no prototype (e.g., `Object.create( null )`) are plain
-        if ( !proto ) {
-            return true;
-        }
-
-        // Objects with prototype are plain iff they were constructed by a global Object function
-        Ctor = hasOwn.call( proto, "constructor" ) && proto.constructor;
-        return typeof Ctor === "function" && fnToString.call( Ctor ) === ObjectFunctionString;
     }
 
     /**
@@ -365,148 +313,290 @@ console.time('123');
             this.router = {};
             this.fileMap = {};
             this.libs = {};
-            this.config = mixin({}, options);
-            if(routerJS.history && !window._historyPushState) {
+            this.config = extend({
+                revSuffix: '-[0-9a-f]{8,10}-?',
+                prefix: routerJS.prefix,
+                cssPath: '',
+                jsPath: ''
+            }, options);
+            if(!this.config.onStart || !isFunction(this.config.onStart)) {
+                this.config.onStart = function() {};
+            }
+            this.config.revSuffix = new RegExp(this.config.revSuffix);
+            var onStartFun = this.config.onStart;
+
+            if(routerJS.history && !window._historyPushState && ('pushState' in history)) {
                 window._historyPushState = History.prototype.pushState;
                 window._historyReplaceState = History.prototype.replaceState;
 
-                History.prototype.pushState = function() {
-                    _historyPushState.apply(this, arguments);
-                    routerJS.isVirgin = false;
-                    routerJS.load();
+                History.prototype.pushState = function(state, title, url) {
+                    onStartFun();
+                    _historyPushState.call(this, state, title, url);
+                    return routerJS.load();
                 };
 
-                History.prototype.replaceState = function() {
-                    _historyReplaceState.apply(this, arguments);
-                    routerJS.isVirgin = false;
-                    routerJS.load();
+                History.prototype.replaceState = function(state, title, url) {
+                    onStartFun();
+                    _historyReplaceState.call(this, state, title, url);
+                    return routerJS.load();
                 };
+
+                window.addEventListener("popstate", function(e) {
+                    onStartFun();
+                    return routerJS.load();
+                });
             }
         },
         set: function(path, options) {
             this.router[path] = options;
         },
-        makeMap: function() {
-            var jsMap = this.config.jsMap;
-            var fileMap = this.fileMap;
+        makeJSItem: function(jsObj, type, name) {
+            var that = this;
+            var makeJSItem = this.makeJSItem;
+            var libs = this.libs;
+            var prefix = this.config.prefix;
+            var paths = {
+                js: that.config.jsPath,
+                css: that.config.cssPath
+            };
+
+            if(isArray(jsObj)) {
+                if(name) {
+                    return routerJS.error('jsMap do not use Array Object.');
+                }
+                var jsObjs = [];
+                each(jsObj, function(jsItem) {
+                    jsObjs.push(makeJSItem.call(that, jsItem, type));
+                });
+                return jsObjs;
+            }
             var jsPath = this.config.jsPath || '';
-            eachProp(jsMap, function(js, name) {
+            var revSuffix = this.config.revSuffix;
+            var fileMap = this.fileMap;
+            var new_jsObj = {
+                type: type || 'js'
+            };
+            new_jsObj.path = jsObj.path || (isString(jsObj) && jsObj);
+            new_jsObj.name = name || jsObj.name || new_jsObj.path.replace(ext[new_jsObj.type], '').replace(revSuffix, '');
+            if(!new_jsObj.name) {
+                return routerJS.error('not name ');
+            }
+            if(new_jsObj.type == 'js' && fileMap[name]) {
+                return extend({}, fileMap[name]);
+            }
+            new_jsObj.path = paths[new_jsObj.type] + new_jsObj.path.replace(ext[new_jsObj.type], '').replace(revSuffix, '') + '.' + new_jsObj.type;
+            new_jsObj.isremote = isRemote(new_jsObj.path);
+            if(type != 'js') {
+              return new_jsObj;
+            }
+            new_jsObj.children = [];
+            new_jsObj.require = (isString(jsObj.require) && [jsObj.require]) || (isArray(jsObj.require) && jsObj.require) || [];
+            var libName = prefix + name + '.js';
+            libs[libName] = 1;
+            return new_jsObj;
+        },
+        makeMap: function() {
+            var that = this;
+            var jsMap = this.config.jsMap;
+            var router = this.router;
+            var fileMap = this.fileMap;
+            var makeJSItem = this.makeJSItem;
 
-                fileMap[name] = {
-                    name: name,
-                    type: 'js'
-                };
-
-                var jsName, path;
-
-                if(isObject(js)) {
-                    jsName = js.path.replace(jsExt, '');
-                    path = jsPath + jsName + '.js';
-                    if(js.require) {
-                        if(isString(js.require)) {
-                            js.require = [js.require];
-                        }
+            eachProp(jsMap, function(jsObj, name) {
+                var new_jsObj = makeJSItem.call(that, jsObj);
+                new_jsObj && (fileMap[name] = makeJSItem.call(that, jsObj, 'js', name));
+            });
+            eachProp(router, function(route, path) {
+                if(route.js) {
+                    if(!isArray(route.js)) {
+                        route.js = [route.js];
                     }
+                    route.js = makeJSItem.call(that, route.js, 'js');
                 }
-
-                if(isString(js)) {
-                    jsName = js.replace(jsExt, '');
-                    path = jsPath + jsName + '.js';
+                if(route.css) {
+                    if(!isArray(route.css)) {
+                        route.css = [route.css];
+                    }
+                    route.css = makeJSItem.call(that, route.css, 'css');
                 }
-
-                js.path = path;
-                js.isremote = isRemote(path);
-                mixin(fileMap[name], js);
             });
         },
         makeThisPage: function() {
-            var that = this;
             var pathname = location.pathname;
-            var cssList = [];
-            var jsList = [];
+            var cssList = {};
             var cssPath = this.config.cssPath || '';
             var jsPath = this.config.jsPath || '';
-            var router = this.router;
-            var fileMap = mixin({}, this.fileMap);
+            var router = extend({}, this.router);
+            var fileMap = this.fileMap;
+            var revSuffix = this.config.revSuffix;
+            var libs = this.libs;
+            var prefix = this.config.prefix;
 
             thisTimeUse = {};
-            thisTimeLibs = {};
+            thisCbs = [];
+            queue = [];
+
+            if(this.config.cb && isFunction(this.config.cb)) {
+                thisCbs.push(this.config.cb);
+            }
 
             eachProp(router, function(route, path) {
-                var pathReg = pathtoRegexp(path);
-                if(pathReg.exec(pathname)) {
-                    eachProp(route, function(files, type) {
-                        if(type == "css") {
-                            if(isString(files)) {
-                               cssList.push(files);
-                            }
-                            if(isArray(files)) {
-                                cssList = cssList.concat(files);
-                            }
+                if(route.js) {
+                    if(isString(route.js)) {
+                        var jslib = prefix + route.js.replace(ext.js, '').replace(revSuffix, '') + '.js';
+                        libs[jslib] = 1;
+                    }
+                    if(route.js.path) {
+                        if(isString(route.js.path)) {
+                            var jslib = prefix + route.js.path.replace(ext.js, '').replace(revSuffix, '') + '.js';
+                            libs[jslib] = 1;
                         }
-                        if(type == "js") {
-                            var js = files;
-                            var name, path;
+                        if(isArray(route.js.path)) {
+                            each(route.js.path, function(jsname) {
+                                var jslib = prefix + jsname.replace(ext.js, '').replace(revSuffix, '') + '.js';
+                                libs[jslib] = 1;
+                            });
+                        }
+                    }
+                }
+                if(route.css) {
+                    if(isString(route.css)) {
+                        var csslib = prefix + route.css.replace(ext.css, '').replace(revSuffix, '') + '.css';
+                        libs[csslib] = 1;
+                    }
+                    if(isArray(route.css)) {
+                        each(route.css, function(cssname) {
+                            var csslib = prefix + cssname.replace(ext.css, '').replace(revSuffix, '') + '.css';
+                            libs[csslib] = 1;
+                        });
+                    }
+                }
 
-                            if(isString(js)) {
-                                name = js.replace(jsExt, '');
-                                path = jsPath + name + '.js';
-                                if(routerJS.loadedJS[name]) {
-                                    return;
-                                }
-                                if(fileMap[name]) {
-                                    thisTimeUse[name] = fileMap[name];
-                                    return;
-                                }
+                var pathReg = pathtoRegexp(path);
+                if(!pathReg.exec(pathname)) {
+                    return;
+                }
+                if(route.cb && isFunction(route.cb)) {
+                    thisCbs.push(route.cb);
+                }
+
+                if(route.css) {
+
+                    if(isString(route.css)) {
+                        var name = route.css.replace(ext.css, '').replace(revSuffix, '');
+                        var path = cssPath + route.css;
+                        cssList[name] = {
+                            name: name,
+                            path: path,
+                            type: 'css',
+                            isremote: isRemote(path),
+                            children: [],
+                            require: []
+                        };
+                    }
+
+                    if(isArray(route.css)) {
+                        each(route.css, function(path) {
+                            var name = path.replace(ext.css, '').replace(revSuffix, '');
+                            var path = cssPath + path;
+                            cssList[name] = {
+                                name: name,
+                                path: path,
+                                type: 'css',
+                                isremote: isRemote(path),
+                                children: [],
+                                require: []
+                            };
+                        });
+                    }
+
+                }
+
+                if(route.js) {
+                    if(isString(route.js)) {
+                        if(fileMap[route.js]) {
+                            thisTimeUse[route.js] = fileMap[route.js];
+                            return;
+                        }
+                        var name = route.js.replace(ext.js, '').replace(revSuffix, '');
+                        var path = jsPath + route.js;
+                        var isremote = isRemote(path);
+                        thisTimeUse[name] = {
+                            name: name,
+                            path: path,
+                            type: 'js',
+                            isremote: isremote,
+                            children: [],
+                            require: []
+                        };
+                        return;
+                    }
+                    if(isArray(route.js)) {
+                        each(route.js, function(jsObj) {
+                            if(fileMap[jsObj]) {
+                                thisTimeUse[jsObj] = fileMap[files];
+                                return;
                             }
-
-                            if(isObject(js)) {
-                                if(js.when && isFunction(js.when) && !js.when.apply(that)) {
-                                    return;
-                                }
-                                name = js.path.replace(jsExt, '');
-                                path = jsPath + name + '.js';
-                                if(routerJS.loadedJS[name]) {
-                                    return;
-                                }
-                                if(js.require) {
-                                    if(isString(js.require)) {
-                                        js.require = [js.require];
-                                    }
-                                }
-                            }
-
+                            var name = jsObj.replace(ext.js, '').replace(revSuffix, '');
+                            var path = jsPath + jsObj;
+                            var isremote = isRemote(path);
                             thisTimeUse[name] = {
                                 name: name,
-                                type: 'js'
+                                path: path,
+                                type: 'js',
+                                isremote: isremote,
+                                children: [],
+                                require: []
                             };
+                        });
+                    }
 
-                            js.path = path;
-                            js.isremote = isRemote(path);
-                            
-                            mixin(thisTimeUse[name], js);
-
+                    if(isObject(route.js)) {
+                        var name = route.js.name || route.js.path.replace(ext.js, '').replace(revSuffix, '');
+                        var path = jsPath + route.js.path;
+                        var isremote = isRemote(path);
+                        var require = [];
+                        if(route.js.require) {
+                            if(isString(route.js.require)) {
+                                require = [route.js.require];
+                            }
+                            if(isArray(route.js.require)) {
+                                require = route.js.require;
+                            }
                         }
-                    });
+                        thisTimeUse[name] = {
+                            name: name,
+                            path: path,
+                            type: 'js',
+                            isremote: isremote,
+                            children: [],
+                            require: require
+                        };
+                    }
+
                 }
             });
 
             function reMapping(requireList, childrenName) {
-                var that = this;
-                each(requireList, function(requireName) {
-                    if(routerJS.loadedJS[requireName]) {
-                        thisTimeUse[childrenName].require.splice(thisTimeUse[childrenName].require.indexOf(requireName), 1);
-                        return;
-                    }
-                    if(fileMap[requireName].when && isFunction(fileMap[requireName].when) && !fileMap[requireName].when.apply(that)) {
-                        thisTimeUse[childrenName].require.splice(thisTimeUse[childrenName].require.indexOf(requireName), 1);
-                        return;
-                    }
-                    if(!thisTimeUse[requireName] && fileMap[requireName]) {
+                return each(requireList, function(requireName) {
+                    if(!hasProp(thisTimeUse, requireName)) {
                         thisTimeUse[requireName] = fileMap[requireName];
+                    }
+                    if(!thisTimeUse[requireName].children) {
                         thisTimeUse[requireName].children = [];
                     }
-                    thisTimeUse[requireName].children.push(childrenName);
+                    if(thisTimeUse[requireName].children.indexOf(childrenName) == -1) {
+                        thisTimeUse[requireName].children.push(childrenName);
+                    }
+                    if(!thisTimeUse[childrenName].require) {
+                        thisTimeUse[childrenName].require = [];
+                    }
+                    if(thisTimeUse[childrenName].require.indexOf(requireName) == -1) {
+                        thisTimeUse[childrenName].require.push(requireName);
+                    }
+                    if(queue.indexOf(requireName) == -1) {
+                        queue.push(requireName);
+                    }
                     if(thisTimeUse[requireName].require && thisTimeUse[requireName].require.length) {
                         reMapping(thisTimeUse[requireName].require, requireName);
                     }
@@ -514,40 +604,45 @@ console.time('123');
             }
 
             eachProp(thisTimeUse, function(jsObj, name) {
+                if(queue.indexOf(name) == -1) {
+                    queue.push(name);
+                }
                 if(jsObj.require && jsObj.require.length) {
                     reMapping(jsObj.require, name);
                 }
             });
 
-            eachProp(thisTimeUse, function(jsObj, name) {
-                if(queue.lib.indexOf(name) != -1 || queue.js.indexOf(name) != -1) {
-                    return;
-                }
-                if(jsObj.lib) {
-                    queue.libs.push(name);
-                    if(jsObj.require && jsObj.require.length) {
-                        each(jsObj.require, function(requireName) {
-                            queue.libs.push(requireName);
-                        });
-                    }
-                    return;
-                }
-                queue.js.push(name);
-            });
-
-            if(queue.libs.length) {
-                each(queue.libs, function(jsname) {
-                    routerJS.push(jsname, function() {
-                        each(queue.js, function(jsname) {
-                            routerJS.push(jsname);
-                        });
-                    });
-                });
-            } else {
-                each(queue.js, function(jsname) {
-                    routerJS.push(jsname);
+            if(queue.length == 0 && thisCbs.length) {
+                each(thisCbs, function(cb) {
+                    cb();
                 });
             }
+
+            eachProp(thisTimeUse, function(jsObj, name) {
+
+                if(routerJS.loadedJS[name]) {
+                    thisTimeUse[name].status = 'ready';
+                    routerJS.push(name);
+                    return false;
+                }
+
+                if(thisTimeUse[name].when && isFunction(thisTimeUse[name].when) && !thisTimeUse[name].when()) {
+                    thisTimeUse[name].status = 'ready';
+                    routerJS.push(name);
+                    return false;
+                }
+                routerJS.get(jsObj, function(obj, error) {
+                    if(obj) {
+                        thisTimeUse[name].source = obj.source;
+                        thisTimeUse[name].status = 'loaded';
+                    }
+                    if(error) {
+                        thisTimeUse[name].status = 'pending';
+                    }
+                    thisTimeUse[name].el = routerJS.createJS(thisTimeUse[name]);
+                    routerJS.push(name);
+                });
+            });
 
             /* Load CSS */
             each(routerJS.loadedCSS, function(loadedCSS) {
@@ -555,21 +650,12 @@ console.time('123');
                     head.removeChild(routerJS.loadedCSS[loadedCSS]);
                 }
             });
-            each(cssList, function(name) {
-                var cssName = name.replace(cssExt, '');
-                if(!routerJS.loadedCSS[cssName]) {
-                    var path = cssPath + cssName + '.css';
-                    var cssObj = {
-                        path: path,
-                        name: cssName,
-                        type: 'css',
-                        isremote: isRemote(path)
-                    };
+            eachProp(cssList, function(cssObj, name) {
+                if(!routerJS.loadedCSS[name]) {
                     routerJS.get(cssObj, function(obj, error) {
                         if(obj) {
-                            routerJS.setStorage(obj);
                             routerJS.loadedCSS[name] = routerJS.createCSS(obj);
-                            head.appendChild(routerJS.loadedCSS[cssName]);
+                            head.appendChild(routerJS.loadedCSS[name]);
                         }
                     });
                 }
@@ -581,19 +667,37 @@ console.time('123');
             this.load();
         },
         load: function() {
+            routerJS.isRedirect = isRedirect(routerJS.oldpath);
+            if(routerJS.isVirgin && routerJS.isRedirect) {
+                routerJS.isVirgin = false;
+            }
+            routerJS.oldpath = location.href;
             this.makeThisPage();
+            this.clear();
+        },
+        clear: function() {
+            var prefix = this.config.prefix;
+            var libs = this.libs;
+            !!window.localStorage && eachProp(localStorage, function(storage, name) {
+                if(name.indexOf(prefix) == 0 && !libs[name]) {
+                    localStorage.removeItem(name);
+                }
+            });
         }
     };
 
-    mixin(routerJS, {
+    extend(routerJS, {
         debug: false,
-
         isVirgin: true,
-
+        isRedirect: false,
         history: false,
 
         loadedCSS: {},
         loadedJS: {},
+
+        oldpath: location.href,
+
+        prefix: 'routerI_',
 
         error: function(msg) {
             throw new Error( msg );
@@ -620,14 +724,13 @@ console.time('123');
         createCSS: function(obj) {
             var element;
             if(obj.source) {
-                if(document.createStyleSheet) {
-                    element = document.createStyleSheet();
-                    element.cssText = obj.source;
-                    return element;
-                }
                 element = document.createElement('style');
                 element.type = 'text/css';
-                element.textContent = obj.source;
+                if(typeof document.textContent == 'object') {
+                    element.textContent = obj.source;
+                    return element;
+                }
+                element.styleSheet.cssText = obj.source;
                 return element;
             }
             element = document.createElement('link');
@@ -637,12 +740,12 @@ console.time('123');
         },
 
         getStrage: function(obj) {
-            var name = 'lsI_' + obj.name + '.' + obj.type;
+            var name = routerJS.prefix + obj.name + '.' + obj.type;
             return !!window.localStorage && localStorage.getItem(name);
         },
 
         setStorage: function(obj) {
-            var name = 'lsI_' + obj.name + '.' + obj.type;
+            var name = routerJS.prefix + obj.name + '.' + obj.type;
             var data = JSON.stringify(obj);
             return !!window.localStorage && localStorage.setItem(name, data);
         },
@@ -655,7 +758,7 @@ console.time('123');
             } catch(e) {
             }
             if(_data_tmp && _data_tmp.source && _data_tmp.path && (_data_tmp.path == obj.path) && !_data_tmp.error) {
-                cb(_data_tmp);
+                return cb(_data_tmp);
             }
             var xhr, xtype, data_tmp, name = obj.name;
             try{
@@ -684,26 +787,28 @@ console.time('123');
                             if (xhr.readyState == 4) {
                                 if(xhr.status == 200 || xhr.status == 304) {
                                     obj.source = xhr.responseText;
-                                    cb(obj);
+                                    routerJS.setStorage(obj);
+                                    return cb(obj);
                                 } else if(obj.isremote && xhr.status === 0) {
-                                    cb(null, "not-allow-cors");
+                                    return cb(null, "not-allow-cors");
                                 } else {
-                                    cb(null, xhr.status);
+                                    return cb(null, xhr.status);
                                 }
                             }
                         };
                         xhr.open('get', obj.path, true);
                         xhr.send(null);
                     } catch(e) {
-                        cb(null, e);
+                        return cb(null, e);
                     }
                 } else {
                     xhr.onerror = function(e) {
-                        rejcet("not-allow-cors");
+                        return cb(null, "not-allow-cors");
                     };
                     xhr.onload = function() {
                         obj.source = xhr.responseText;
-                        cb(obj);
+                        routerJS.setStorage(obj);
+                        return cb(obj);
                     };
                     xhr.open('get', obj.path);
                     xhr.send(null);
@@ -712,30 +817,61 @@ console.time('123');
         },
 
         push: function(name, cb) {
-            routerJS.get(thisTimeUse[name], function(obj, error) {
-                if(obj) {
-                    routerJS.setStorage(obj);
-                    if(obj.require.length) {
-                        return;
+            var jsObj = thisTimeUse[name];
+            if(jsObj.require && jsObj.require.length) {
+                var hasRequires;
+                each(jsObj.require, function(requireNmae) {
+                    if(thisTimeUse[requireNmae]) {
+                        hasRequires = true;
                     }
-                    routerJS.loadedJS[name] = routerJS.createJS(obj);
-                    head.appendChild(routerJS.loadedCSS[cssName]);
-                    if(thisTimeUse[name].children) {
-                        each(thisTimeUse[name].children, function(childrenName) {
-                            routerJS.push(childrenName);
-                        });
+                    if(!thisTimeUse[requireNmae]) {
+                        jsObj.require.remove(requireNmae);
                     }
-                    delete thisTimeUse[name];
-                    if(cb && isFunction(cb)) {
-                        cb();
-                    }
+                });
+                if(!!hasRequires && jsObj.status != 'ready') {
+                    return;
                 }
-            });
+            }
+            if(jsObj.status == 'ready') {
+                routerJS.allReady(jsObj);
+            }
+            if(jsObj.status == 'loaded') {
+                routerJS.loadedJS[jsObj.name] = 1;
+                head.appendChild(jsObj.el);
+                routerJS.allReady(jsObj);
+            }
+            if(jsObj.status == 'pending') {
+                jsObj.el.onload = jsObj.el.onreadystatechange = function(e) {
+                    if(!jsObj.el.el.readyState || jsObj.el.el.readyState == "loaded" || jsObj.el.el.readyState == "complete") {
+                        routerJS.loadedJS[jsObj.name] = 1;
+                        routerJS.allReady(jsObj);
+                    }
+                };
+                head.appendChild(jsObj.el);
+            }
+        },
+
+        allReady: function(jsObj) {
+            var childrens = extend([], jsObj.children);
+            delete thisTimeUse[jsObj.name];
+            queue.remove(jsObj.name);
+            if(childrens.length) {
+                each(childrens, function(childrenName) {
+                    if(thisTimeUse[childrenName]) {
+                        thisTimeUse[childrenName].require.remove(jsObj.name);
+                        routerJS.push(childrenName);
+                    }
+                });
+            }
+            if(queue.length <= 0 && thisCbs.length) {
+                each(thisCbs, function(cb) {
+                    cb();
+                });
+            }
         },
 
         load: function() {
-            var domain = location.hostname;
-            return routerJS[domain] && routerJS[domain].load();
+            return routerJS[host] && routerJS[host].load();
         }
 
     });
@@ -761,10 +897,6 @@ console.time('123');
     return routerJS;
 
 }));
-
-/*
-* routerJS.org service
-*/
 
 
 routerJS.history = true;
@@ -836,10 +968,7 @@ service1.set('*', {
     'css': 'common.css'
 });
 service1.set('/', {
-    'js': {
-        path:'index',
-        require: 'jquery.validate.additional'
-    },
+    'js': ['a','b','c'],
     'css': 'index.css'
 });
 service1.set('/bids|/packages|/transferred', {
@@ -864,6 +993,3 @@ service1.set('/transferred', {
     }
 });
 service1.run();
-
-console.log(routerJS["routerjs.org"]);
-console.timeEnd('123');
