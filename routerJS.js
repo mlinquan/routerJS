@@ -444,6 +444,8 @@ if(!Array.prototype.remove) {
 
             new_jsObj.path = paths[new_jsObj.type] + new_jsObj.path.replace(ext[new_jsObj.type], '') + '.' + new_jsObj.type;
             new_jsObj.isremote = isRemote(new_jsObj.path);
+            var libName = prefix + new_jsObj.name + '.' + new_jsObj.type;
+            libs[libName] = 1;
             if(type != 'js') {
               return new_jsObj;
             }
@@ -452,8 +454,6 @@ if(!Array.prototype.remove) {
             if(jsObj.when) {
                 new_jsObj.when = jsObj.when;
             }
-            var libName = prefix + new_jsObj.name + '.js';
-            libs[libName] = 1;
             return new_jsObj;
         },
         makeMap: function() {
@@ -740,9 +740,11 @@ if(!Array.prototype.remove) {
             } catch(e) {
                 console.log(e);
             }
+            console.log(obj.name, _data_tmp && _data_tmp.source && _data_tmp.path && (_data_tmp.path == obj.path) && !_data_tmp.error)
             if(_data_tmp && _data_tmp.source && _data_tmp.path && (_data_tmp.path == obj.path) && !_data_tmp.error) {
                 return cb(_data_tmp);
             }
+
             var xhr, xtype, data_tmp, name = obj.name;
 
             try{
