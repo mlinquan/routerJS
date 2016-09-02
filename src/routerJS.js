@@ -9,7 +9,6 @@
  *
  * Copycat: LinQuan
  */
-
 if (!Array.prototype.indexOf)
 {
   Array.prototype.indexOf = function(elt /*, from*/)
@@ -349,7 +348,7 @@ if(!Array.prototype.remove) {
         if(!domain) {
             domain = host;
         }
-        if(!routerJS[domain]) {
+        if(!hasProp(routerJS, domain)) {
             routerJS[domain] = new routerJS.init(domain);
         }
         return routerJS[domain];
@@ -375,16 +374,20 @@ if(!Array.prototype.remove) {
                 window._historyReplaceState = History.prototype.replaceState;
 
                 History.prototype.pushState = function(state, title, url) {
-                    if(routerJS.changeUrl(location.href, url).hash) {
+                    if(routerJS.changeUrl(url).hash) {
                         return false;
                     }
                     onStartFun(state, title, url);
-                    _historyPushState.call(this, state, title, url);
+                    if(routerJS.changeUrl(url).href) {
+                        _historyPushState.call(this, state, title, url);
+                    } else {
+                        _historyReplaceState.call(this, state, title, url);
+                    }
                     return routerJS.load();
                 };
 
                 History.prototype.replaceState = function(state, title, url) {
-                    if(routerJS.changeUrl(location.href, url).hash) {
+                    if(routerJS.changeUrl(url).hash) {
                         return false;
                     }
                     onStartFun(state, title, url);
@@ -393,16 +396,18 @@ if(!Array.prototype.remove) {
                 };
 
                 window.addEventListener("popstate", function(e) {
-                    if(routerJS.changeUrl(location.href, routerJS.oldpath).hash) {
+                    if(routerJS.changeUrl(routerJS.oldpath).hash) {
                         return false;
                     }
                     onStartFun();
                     return routerJS.load();
                 });
             }
+            return this;
         },
         set: function(path, options) {
             this.router[path] = options;
+            return this;
         },
         makeItem: function(jsObj, type, name) {
             var fileMap = this.fileMap;
@@ -438,7 +443,7 @@ if(!Array.prototype.remove) {
                 return routerJS.error('not name ');
             }
 
-            if(new_jsObj.type == 'js' && fileMap[new_jsObj.name]) {
+            if(new_jsObj.type == 'js' && hasProp(fileMap, new_jsObj.name)) {
                 return extend({}, fileMap[new_jsObj.name]);
             }
 
@@ -453,6 +458,9 @@ if(!Array.prototype.remove) {
             new_jsObj.require = (isString(jsObj.require) && [jsObj.require]) || (isArray(jsObj.require) && jsObj.require) || [];
             if(jsObj.when) {
                 new_jsObj.when = jsObj.when;
+            }
+            if(jsObj.storage !== undefined) {
+                new_jsObj.storage = jsObj.storage;
             }
             return new_jsObj;
         },
@@ -529,13 +537,13 @@ if(!Array.prototype.remove) {
                     if(!hasProp(thisTimeUse, requireName)) {
                         thisTimeUse[requireName] = fileMap[requireName];
                     }
-                    if(!thisTimeUse[requireName].children) {
+                    if(!hasProp(thisTimeUse[requireName], 'children')) {
                         thisTimeUse[requireName].children = [];
                     }
                     if(thisTimeUse[requireName].children.indexOf(childrenName) == -1) {
                         thisTimeUse[requireName].children.push(childrenName);
                     }
-                    if(!thisTimeUse[childrenName].require) {
+                    if(!hasProp(thisTimeUse[childrenName], 'require')) {
                         thisTimeUse[childrenName].require = [];
                     }
                     if(thisTimeUse[childrenName].require.indexOf(requireName) == -1) {
@@ -544,7 +552,7 @@ if(!Array.prototype.remove) {
                     if(queue.indexOf(requireName) == -1) {
                         queue.push(requireName);
                     }
-                    if(thisTimeUse[requireName].require && thisTimeUse[requireName].require.length) {
+                    if(hasProp(thisTimeUse[requireName], 'require') && thisTimeUse[requireName].require.length) {
                         reMapping(thisTimeUse[requireName].require, requireName);
                     }
                 });
@@ -567,7 +575,7 @@ if(!Array.prototype.remove) {
 
             eachProp(thisTimeUse, function(jsObj, name) {
 
-                if(routerJS.loadedJS[name]) {
+                if(hasProp(routerJS.loadedJS, name)) {
                     thisTimeUse[name].status = 'ready';
                     routerJS.push(name);
                     return false;
@@ -592,13 +600,14 @@ if(!Array.prototype.remove) {
             });
 
             /* Load CSS */
-            each(routerJS.loadedCSS, function(loadedCSS) {
-                if(cssList.indexOf(loadedCSS) == -1) {
-                    head.removeChild(routerJS.loadedCSS[loadedCSS]);
+            /*eachProp(routerJS.loadedCSS, function(loadedCSS, name) {
+                if(!hasProp(cssList, name)) {
+                    head.removeChild(loadedCSS);
+                    delete routerJS.loadedCSS[name];
                 }
-            });
+            });*/
             eachProp(cssList, function(cssObj, name) {
-                if(!routerJS.loadedCSS[name]) {
+                if(!hasProp(routerJS.loadedCSS, name)) {
                     routerJS.get(cssObj, function(obj, error) {
                         routerJS.loadedCSS[name] = routerJS.createCSS(obj || cssObj);
                         head.appendChild(routerJS.loadedCSS[name]);
@@ -629,10 +638,13 @@ if(!Array.prototype.remove) {
             }
         },
         clear: function() {
+            if(!routerJS.support.localStorage) {
+                return;
+            }
             var prefix = this.config.prefix;
             var libs = this.libs;
-            !!window.localStorage && eachProp(localStorage, function(storage, name) {
-                if(name.indexOf(prefix) == 0 && !libs[name]) {
+            eachProp(localStorage, function(storage, name) {
+                if(name.indexOf(prefix) == 0 && !hasProp(libs, name)) {
                     localStorage.removeItem(name);
                 }
             });
@@ -640,10 +652,15 @@ if(!Array.prototype.remove) {
     };
 
     extend(routerJS, {
+        support: {
+            textContent: typeof document.textContent !== 'undefined',
+            localStorage: ('localStorage' in window)
+        },
         debug: false,
         isVirgin: true,
         isRedirect: false,
         history: false,
+        storage: true,
         allReadyed: false,
 
         loadedCSS: {},
@@ -661,15 +678,20 @@ if(!Array.prototype.remove) {
         changeUrl: function(url1, url2) {
             var tmp_a1 = document.createElement('a');
             tmp_a1.href = url1;
-            var tmp_a2 = document.createElement('a');
-            tmp_a2.href = url2;
+            var tmp_a2;
+            if(!url2) {
+                tmp_a2 = location;
+            } else {
+                tmp_a2 = document.createElement('a');
+                tmp_a2.href = url2;
+            }
 
             var host = tmp_a1.hostname;
             var path = tmp_a1.pathname;
             var href = tmp_a1.href;
             var hash = tmp_a1.hash || href.replace(/([^\#]*)/, "");//.replace(/^#(.*)$/, "$1");
             var nohash_href = href.replace(hash, '');
-            var search = formatSearch(this.search);
+            var search = formatSearch(tmp_a1.search);
 
             var local_host = tmp_a2.hostname;
             var local_path = tmp_a2.pathname;
@@ -691,7 +713,7 @@ if(!Array.prototype.remove) {
                 if(routerJS.debug) {
                     element.title = obj.name;
                 }
-                if(typeof document.textContent == 'object') {
+                if(routerJS.support.textContent) {
                     element.textContent = obj.source;
                     return element;
                 }
@@ -707,7 +729,7 @@ if(!Array.prototype.remove) {
             if(obj.source) {
                 element = document.createElement('style');
                 element.type = 'text/css';
-                if(typeof document.textContent == 'object') {
+                if(routerJS.support.textContent) {
                     element.textContent = obj.source;
                     return element;
                 }
@@ -722,17 +744,26 @@ if(!Array.prototype.remove) {
         },
 
         getStrage: function(obj) {
+            if(!routerJS.support.localStorage) {
+                return;
+            }
             var name = routerJS.prefix + obj.name + '.' + obj.type;
-            return !!window.localStorage && localStorage.getItem(name);
+            return localStorage.getItem(name);
         },
 
         setStorage: function(obj) {
+            if(!routerJS.support.localStorage) {
+                return;
+            }
             var name = routerJS.prefix + obj.name + '.' + obj.type;
             var data = JSON.stringify(obj);
-            return !!window.localStorage && localStorage.setItem(name, data);
+            return localStorage.setItem(name, data);
         },
 
         get: function(obj, cb) {
+            if(routerJS.debug || (!routerJS.storage && !obj.storage) || obj.storage === false) {
+                return cb(null, 'debug');
+            }
             var _ls_tmp = routerJS.getStrage(obj),
             _data_tmp;
             try{
@@ -816,10 +847,10 @@ if(!Array.prototype.remove) {
             if(jsObj.require && jsObj.require.length) {
                 var hasRequires;
                 each(jsObj.require, function(requireNmae) {
-                    if(thisTimeUse[requireNmae]) {
+                    if(hasProp(thisTimeUse, requireNmae)) {
                         hasRequires = true;
                     }
-                    if(!thisTimeUse[requireNmae]) {
+                    if(!hasProp(thisTimeUse, requireNmae)) {
                         jsObj.require.remove(requireNmae);
                     }
                 });
@@ -852,7 +883,7 @@ if(!Array.prototype.remove) {
             queue.remove(jsObj.name);
             if(childrens.length) {
                 each(childrens, function(childrenName) {
-                    if(thisTimeUse[childrenName]) {
+                    if(hasProp(thisTimeUse, childrenName)) {
                         thisTimeUse[childrenName].require.remove(jsObj.name);
                         routerJS.push(childrenName);
                     }
