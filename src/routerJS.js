@@ -72,8 +72,10 @@ if(!Array.prototype.remove) {
     op = Object.prototype,
     ostring = op.toString,
     hasOwn = op.hasOwnProperty,
-    cssExt = /\.css$/,
-    jsExt = /\.js$/,
+    ext = {
+      css: /\.css([\#\?]{1}.*)?$/,
+      js: /\.js([\#\?]{1}.*)?$/
+    },
     thisTimeUse = {},
     queue = [];
 
@@ -86,7 +88,21 @@ if(!Array.prototype.remove) {
     function isRedirect(path) {
         var _link_tmp = document.createElement('a');
         _link_tmp.href = path;
-        return _link_tmp.pathname != location.pathname;
+        var _link_pathname = _link_tmp.pathname;
+        if(!/^\//.exec(_link_pathname)) {
+            _link_pathname = '/' + _link_pathname;
+        }
+        var local_path_ary = location.pathname.split('/');
+        var link_path_ary = _link_pathname.split('/');
+        var path_depth = 0;
+        var path_depth_max = Math.max(local_path_ary.length, link_path_ary.length);
+        for(var i=1;i<path_depth_max;i++) {
+            if(local_path_ary[i] && link_path_ary[i] && local_path_ary[i] == link_path_ary[i]) {
+                path_depth++;
+            }
+        }
+        routerJS.path_depth = path_depth;
+        return _link_pathname != location.pathname;
     }
 
     function isString(it) {
@@ -388,54 +404,82 @@ if(!Array.prototype.remove) {
         set: function(path, options) {
             this.router[path] = options;
         },
-        makeMap: function() {
-            var jsMap = this.config.jsMap;
+        makeItem: function(jsObj, type, name) {
             var fileMap = this.fileMap;
-            var jsPath = this.config.jsPath || '';
-            var revSuffix = this.config.revSuffix;
+            var that = this;
+            var makeItem = this.makeItem;
             var libs = this.libs;
             var prefix = this.config.prefix;
+            var paths = {
+                js: that.config.jsPath,
+                css: that.config.cssPath
+            };
 
-            eachProp(jsMap, function(js, name) {
-
-                var libName = prefix + name + '.js';
-
-                libs[libName] = 1;
-
-                fileMap[name] = {
-                    name: name,
-                    type: 'js'
-                };
-
-                var path;
-
-                if(isObject(js)) {
-                    path = jsPath + js.path.replace(jsExt, '') + '.js';
-                    if(js.require) {
-                        if(isString(js.require)) {
-                            js.require = [js.require];
-                        }
-                    }
+            if(isArray(jsObj)) {
+                if(name) {
+                    return routerJS.error('jsMap do not use Array Object.');
                 }
-
-                if(!js.require) {
-                    js.require = [];
-                }
-
-                each(js.require, function(lib) {
-                    var lib_name = prefix + lib + '.js';
-                    libs[lib_name] = 1;
+                var jsObjs = [];
+                each(jsObj, function(jsItem) {
+                    jsObjs.push(makeItem.call(that, jsItem, type));
                 });
+                return jsObjs;
+            }
+            var jsPath = this.config.jsPath || '';
+            var revSuffix = this.config.revSuffix;
+            var fileMap = this.fileMap;
+            var new_jsObj = {
+                type: type || 'js'
+            };
+            new_jsObj.path = jsObj.path || (isString(jsObj) && jsObj);
+            new_jsObj.name = name || jsObj.name || new_jsObj.path.replace(ext[new_jsObj.type], '').replace(revSuffix, '');
 
-                js.children = [];
+            if(!new_jsObj.name) {
+                return routerJS.error('not name ');
+            }
 
-                if(isString(js)) {
-                    path = jsPath + js.replace(cssExt, '').replace(revSuffix, '') + '.js';
+            if(new_jsObj.type == 'js' && fileMap[new_jsObj.name]) {
+                return extend({}, fileMap[new_jsObj.name]);
+            }
+
+            new_jsObj.path = paths[new_jsObj.type] + new_jsObj.path.replace(ext[new_jsObj.type], '') + '.' + new_jsObj.type;
+            new_jsObj.isremote = isRemote(new_jsObj.path);
+            var libName = prefix + new_jsObj.name + '.' + new_jsObj.type;
+            libs[libName] = 1;
+            if(type != 'js') {
+              return new_jsObj;
+            }
+            new_jsObj.children = [];
+            new_jsObj.require = (isString(jsObj.require) && [jsObj.require]) || (isArray(jsObj.require) && jsObj.require) || [];
+            if(jsObj.when) {
+                new_jsObj.when = jsObj.when;
+            }
+            return new_jsObj;
+        },
+        makeMap: function() {
+            var that = this;
+            var jsMap = this.config.jsMap;
+            var router = this.router;
+            var fileMap = this.fileMap;
+            var makeItem = this.makeItem;
+
+            eachProp(jsMap, function(jsObj, name) {
+                var new_jsObj = makeItem.call(that, jsObj);
+                new_jsObj && (fileMap[name] = makeItem.call(that, jsObj, 'js', name));
+            });
+            eachProp(router, function(route, path) {
+                if(route.css) {
+                    if(!isArray(route.css)) {
+                        route.css = [route.css];
+                    }
+                    route.css = makeItem.call(that, route.css, 'css');
                 }
-
-                js.path = path;
-                js.isremote = isRemote(path);
-                extend(fileMap[name], js);
+                if(route.js) {
+                    if(!isArray(route.js)) {
+                        route.js = [route.js];
+                    }
+                    route.js = makeItem.call(that, route.js, 'js');
+                }
             });
         },
         makeThisPage: function() {
@@ -450,149 +494,34 @@ if(!Array.prototype.remove) {
             var prefix = this.config.prefix;
 
             thisTimeUse = {};
-            thisCbs = [];
+            routerJS.thisCbs = [];
             queue = [];
             routerJS.allReadyed = false;
 
             if(this.config.cb && isFunction(this.config.cb)) {
-                thisCbs.push(this.config.cb);
+                routerJS.thisCbs.push(this.config.cb);
             }
 
             eachProp(router, function(route, path) {
-                if(route.js) {
-                    if(isString(route.js)) {
-                        var jslib = prefix + route.js.replace(jsExt, '').replace(revSuffix, '') + '.js';
-                        libs[jslib] = 1;
-                    }
-                    if(route.js.path) {
-                        if(isString(route.js.path)) {
-                            var jslib = prefix + route.js.path.replace(jsExt, '').replace(revSuffix, '') + '.js';
-                            libs[jslib] = 1;
-                        }
-                        if(isArray(route.js.path)) {
-                            each(route.js.path, function(jsname) {
-                                var jslib = prefix + jsname.replace(jsExt, '').replace(revSuffix, '') + '.js';
-                                libs[jslib] = 1;
-                            });
-                        }
-                    }
-                }
-                if(route.css) {
-                    if(isString(route.css)) {
-                        var csslib = prefix + route.css.replace(cssExt, '').replace(revSuffix, '') + '.css';
-                        libs[csslib] = 1;
-                    }
-                    if(isArray(route.css)) {
-                        each(route.css, function(cssname) {
-                            var csslib = prefix + cssname.replace(cssExt, '').replace(revSuffix, '') + '.css';
-                            libs[csslib] = 1;
-                        });
-                    }
-                }
 
                 var pathReg = pathtoRegexp(path);
+
                 if(!pathReg.exec(pathname)) {
                     return;
                 }
+
                 if(route.cb && isFunction(route.cb)) {
-                    thisCbs.push(route.cb);
+                    routerJS.thisCbs.push(route.cb);
                 }
 
-                if(route.css) {
+                route.css && (each(route.css, function(cssObj) {
+                    cssList[cssObj.name] = cssObj;
+                }));
 
-                    if(isString(route.css)) {
-                        var name = route.css.replace(cssExt, '').replace(revSuffix, '');
-                        var path = cssPath + route.css;
-                        cssList[name] = {
-                            name: name,
-                            path: path,
-                            type: 'css',
-                            isremote: isRemote(path),
-                            children: [],
-                            require: []
-                        };
-                    }
+                route.js && (each(route.js, function(jsObj) {
+                    thisTimeUse[jsObj.name] = jsObj;
+                }));
 
-                    if(isArray(route.css)) {
-                        each(route.css, function(path) {
-                            var name = path.replace(cssExt, '').replace(revSuffix, '');
-                            var path = cssPath + path;
-                            cssList[name] = {
-                                name: name,
-                                path: path,
-                                type: 'css',
-                                isremote: isRemote(path),
-                                children: [],
-                                require: []
-                            };
-                        });
-                    }
-
-                }
-
-                if(route.js) {
-                    if(isString(route.js)) {
-                        if(fileMap[route.js]) {
-                            thisTimeUse[route.js] = fileMap[route.js];
-                            return;
-                        }
-                        var name = route.js.replace(jsExt, '').replace(revSuffix, '');
-                        var path = jsPath + route.js;
-                        var isremote = isRemote(path);
-                        thisTimeUse[name] = {
-                            name: name,
-                            path: path,
-                            type: 'js',
-                            isremote: isremote,
-                            children: [],
-                            require: []
-                        };
-                        return;
-                    }
-                    if(isArray(route.js)) {
-                        each(route.js, function(jsObj) {
-                            if(fileMap[jsObj]) {
-                                thisTimeUse[jsObj] = fileMap[files];
-                                return;
-                            }
-                            var name = jsObj.replace(jsExt, '').replace(revSuffix, '');
-                            var path = jsPath + jsObj;
-                            var isremote = isRemote(path);
-                            thisTimeUse[name] = {
-                                name: name,
-                                path: path,
-                                type: 'js',
-                                isremote: isremote,
-                                children: [],
-                                require: []
-                            };
-                        });
-                    }
-
-                    if(isObject(route.js)) {
-                        var name = route.js.name || route.js.path.replace(jsExt, '').replace(revSuffix, '');
-                        var path = jsPath + route.js.path;
-                        var isremote = isRemote(path);
-                        var require = [];
-                        if(route.js.require) {
-                            if(isString(route.js.require)) {
-                                require = [route.js.require];
-                            }
-                            if(isArray(route.js.require)) {
-                                require = route.js.require;
-                            }
-                        }
-                        thisTimeUse[name] = {
-                            name: name,
-                            path: path,
-                            type: 'js',
-                            isremote: isremote,
-                            children: [],
-                            require: require
-                        };
-                    }
-
-                }
             });
 
             function reMapping(requireList, childrenName) {
@@ -630,8 +559,8 @@ if(!Array.prototype.remove) {
                 }
             });
 
-            if(queue.length == 0 && thisCbs.length) {
-                each(thisCbs, function(cb) {
+            if(queue.length == 0 && routerJS.thisCbs.length) {
+                each(routerJS.thisCbs, function(cb) {
                     cb();
                 });
             }
@@ -671,10 +600,8 @@ if(!Array.prototype.remove) {
             eachProp(cssList, function(cssObj, name) {
                 if(!routerJS.loadedCSS[name]) {
                     routerJS.get(cssObj, function(obj, error) {
-                        if(obj) {
-                            routerJS.loadedCSS[name] = routerJS.createCSS(obj);
-                            head.appendChild(routerJS.loadedCSS[name]);
-                        }
+                        routerJS.loadedCSS[name] = routerJS.createCSS(obj || cssObj);
+                        head.appendChild(routerJS.loadedCSS[name]);
                     });
                 }
             });
@@ -691,9 +618,15 @@ if(!Array.prototype.remove) {
             } else {
                 routerJS.isVirgin = false;
             }
-            routerJS.oldpath = location.href;
-            this.makeThisPage();
-            this.clear();
+            if(routerJS.oldpath == location.href && routerJS.thisCbs.length) {
+                each(routerJS.thisCbs, function(cb) {
+                    cb();
+                });
+            } else {
+                routerJS.oldpath = location.href;
+                this.makeThisPage();
+                this.clear();
+            }
         },
         clear: function() {
             var prefix = this.config.prefix;
@@ -717,6 +650,7 @@ if(!Array.prototype.remove) {
         loadedJS: {},
 
         oldpath: location.href,
+        thisCbs: [],
 
         prefix: 'routerI_',
 
@@ -782,7 +716,8 @@ if(!Array.prototype.remove) {
             }
             element = document.createElement('link');
             element.rel = 'stylesheet';
-            element.href = obj.url;
+            element.type = 'text/css';
+            element.href = obj.path;
             return element;
         },
 
@@ -803,43 +738,64 @@ if(!Array.prototype.remove) {
             try{
                 _data_tmp = JSON.parse(_ls_tmp);
             } catch(e) {
+                return cb(null, e);
             }
+
             if(_data_tmp && _data_tmp.source && _data_tmp.path && (_data_tmp.path == obj.path) && !_data_tmp.error) {
                 return cb(_data_tmp);
             }
+
             var xhr, xtype, data_tmp, name = obj.name;
+
             try{
                 xhr = new XMLHttpRequest();
             } catch(e) {}
 
-            if(!obj.isremote) {
-                if(!xhr && window.ActiveXObject) {
-                    xhr = new ActiveXObject("Microsoft.XMLHTTP");
-                }
-            } else {
-                if(xhr && ("withCredentials" in xhr)) {
-                    //xhr = new XMLHttpRequest();
-                } else if(typeof XDomainRequest != "undefined") {
-                    xhr = new XDomainRequest();
-                    xtype = 'XDR';
-                } else {
-                    xhr = null;
-                }
+            if(!obj.isremote && !xhr && window.ActiveXObject) {
+                xhr = new ActiveXObject("Microsoft.XMLHTTP");
+            }
+
+            if(obj.isremote && typeof XDomainRequest != "undefined") {
+                xhr = new XDomainRequest();
+                xtype = 'XDR';
+            }
+
+            if(!xhr) {
+                return cb(null, 'maybe not-allow-cors');
             }
 
             if(xhr) {
-                if(!xtype) {
+                if(xtype == 'XDR') {
+                    xhr.timeout = 10000;
+                    xhr.open('get', obj.path);
+                    xhr.onprogress = function() {
+                    };
+                    xhr.ontimeout = function () {
+                        cb(null, "timeout");
+                    };
+                    xhr.onerror = function(e) {
+                        cb(null, "not-allow-cors");
+                    };
+                    xhr.onload = function() {
+                        obj.source = xhr.responseText;
+                        routerJS.setStorage(obj);
+                        cb(obj);
+                    };
+                    setTimeout(function () {
+                        xhr.send();
+                    }, 0);
+                } else {
                     try{//Firefox 3.0
                         xhr.onreadystatechange = function(e) {
                             if (xhr.readyState == 4) {
                                 if(xhr.status == 200 || xhr.status == 304) {
                                     obj.source = xhr.responseText;
                                     routerJS.setStorage(obj);
-                                    return cb(obj);
+                                    cb(obj);
                                 } else if(obj.isremote && xhr.status === 0) {
-                                    return cb(null, "not-allow-cors");
+                                    cb(null, "not-allow-cors");
                                 } else {
-                                    return cb(null, xhr.status);
+                                    cb(null, xhr.status);
                                 }
                             }
                         };
@@ -848,23 +804,15 @@ if(!Array.prototype.remove) {
                     } catch(e) {
                         return cb(null, e);
                     }
-                } else {
-                    xhr.onerror = function(e) {
-                        return cb(null, "not-allow-cors");
-                    };
-                    xhr.onload = function() {
-                        obj.source = xhr.responseText;
-                        routerJS.setStorage(obj);
-                        return cb(obj);
-                    };
-                    xhr.open('get', obj.path);
-                    xhr.send(null);
                 }
             }
         },
 
         push: function(name, cb) {
             var jsObj = thisTimeUse[name];
+            if(!jsObj) {
+                return;
+            }
             if(jsObj.require && jsObj.require.length) {
                 var hasRequires;
                 each(jsObj.require, function(requireNmae) {
@@ -889,7 +837,7 @@ if(!Array.prototype.remove) {
             }
             if(jsObj.status == 'pending') {
                 jsObj.el.onload = jsObj.el.onreadystatechange = function(e) {
-                    if(!jsObj.el.el.readyState || jsObj.el.el.readyState == "loaded" || jsObj.el.el.readyState == "complete") {
+                    if(!jsObj.el.readyState || jsObj.el.readyState == "loaded" || jsObj.el.readyState == "complete") {
                         routerJS.loadedJS[jsObj.name] = 1;
                         routerJS.allReady(jsObj);
                     }
@@ -910,9 +858,9 @@ if(!Array.prototype.remove) {
                     }
                 });
             }
-            if(queue.length <= 0 && thisCbs.length && !routerJS.allReadyed) {
+            if(queue.length <= 0 && routerJS.thisCbs.length && !routerJS.allReadyed) {
                 routerJS.allReadyed = true;
-                each(thisCbs, function(cb) {
+                each(routerJS.thisCbs, function(cb) {
                     cb();
                 });
             }
