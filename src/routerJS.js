@@ -369,7 +369,7 @@ if(!Array.prototype.remove) {
             this.config.revSuffix = new RegExp(this.config.revSuffix);
             var onStartFun = this.config.onStart;
 
-            if(routerJS.history && !window._historyPushState && ('pushState' in history)) {
+            if(routerJS.history && !window._historyPushState && ('pushState' in history) && History) {
                 window._historyPushState = History.prototype.pushState;
                 window._historyReplaceState = History.prototype.replaceState;
 
