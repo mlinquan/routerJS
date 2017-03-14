@@ -100,6 +100,7 @@ if(!Array.prototype.remove) {
                 path_depth++;
             }
         }
+        routerJS.PrevDepth = link_path_ary.length;
         routerJS.path_depth = path_depth;
         return _link_pathname != location.pathname;
     }
@@ -361,7 +362,8 @@ if(!Array.prototype.remove) {
             this.libs = {};
             this.config = extend({
                 revSuffix: '-[0-9a-f]{8,10}-?',
-                prefix: routerJS.prefix
+                prefix: routerJS.prefix,
+                thisPage: {}
             }, options);
             if(!this.config.onStart || !isFunction(this.config.onStart)) {
                 this.config.onStart = function() {};
@@ -491,15 +493,16 @@ if(!Array.prototype.remove) {
             });
         },
         makeThisPage: function() {
-            var pathname = location.pathname;
+            var pathname = location.pathname.replace(/(.+)\/$/, "$1");
             var cssList = {};
             var cssPath = this.config.cssPath || '';
             var jsPath = this.config.jsPath || '';
             var router = extend({}, this.router);
-            var fileMap = this.fileMap;
+            var fileMap = extend({}, this.fileMap);
             var revSuffix = this.config.revSuffix;
             var libs = this.libs;
             var prefix = this.config.prefix;
+            var thisRoute = this.config.thisPage;
 
             thisTimeUse = {};
             routerJS.thisCbs = [];
@@ -518,6 +521,8 @@ if(!Array.prototype.remove) {
                     return;
                 }
 
+                thisRoute = extend(thisRoute, route);
+
                 if(route.cb && isFunction(route.cb)) {
                     routerJS.thisCbs.push(route.cb);
                 }
@@ -531,6 +536,9 @@ if(!Array.prototype.remove) {
                 }));
 
             });
+
+            delete thisRoute.css;
+            delete thisRoute.js;
 
             function reMapping(requireList, childrenName) {
                 return each(requireList, function(requireName) {
