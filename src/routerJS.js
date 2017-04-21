@@ -9,6 +9,10 @@
  *
  * Copycat: LinQuan
  */
+if (typeof module === 'object') {
+  window.module = module;
+  module = undefined;
+}
 if (!Array.prototype.indexOf)
 {
   Array.prototype.indexOf = function(elt /*, from*/)
@@ -40,31 +44,7 @@ if(!Array.prototype.remove) {
     };
 }
 
-//Factory mode copy form jQuery.
-(function( global, factory ) {
-
-    if ( typeof module === "object" && typeof module.exports === "object" ) {
-        // For CommonJS and CommonJS-like environments where a proper `window`
-        // is present, execute the factory and get routerJS.
-        // For environments that do not have a `window` with a `document`
-        // (such as Node.js), expose a factory as module.exports.
-        // This accentuates the need for the creation of a real `window`.
-        // e.g. var routerJS = require("routerjs")(window);
-        // See ticket #14549 for more info.
-        module.exports = global.document ?
-            factory( global, true ) :
-            function( w ) {
-                if ( !w.document ) {
-                    throw new Error( "routerJS requires a window with a document" );
-                }
-                return factory( w );
-            };
-    } else {
-        factory( global );
-    }
-
-// Pass this if window is not defined yet
-}(typeof window !== "undefined" ? window : this, function( window, noGlobal ) {
+(function() {
     var head = document.head || document.getElementsByTagName('head')[0],
     local = location,
     host = local.hostname,
@@ -93,15 +73,15 @@ if(!Array.prototype.remove) {
         }
         var local_path_ary = location.pathname.split('/');
         var link_path_ary = _link_pathname.split('/');
-        var path_depth = 0;
-        var path_depth_max = Math.max(local_path_ary.length, link_path_ary.length);
-        for(var i=1;i<path_depth_max;i++) {
+        var samePathDepth = 0;
+        var samePathDepth_max = Math.max(local_path_ary.length, link_path_ary.length);
+        for(var i=1;i<samePathDepth_max;i++) {
             if(local_path_ary[i] && link_path_ary[i] && local_path_ary[i] == link_path_ary[i]) {
-                path_depth++;
+                samePathDepth++;
             }
         }
-        routerJS.PrevDepth = link_path_ary.length;
-        routerJS.path_depth = path_depth;
+        routerJS.prevDepth = link_path_ary.length;
+        routerJS.samePathDepth = samePathDepth;
         return _link_pathname != location.pathname;
     }
 
@@ -679,6 +659,18 @@ if(!Array.prototype.remove) {
 
         prefix: 'routerI_',
 
+        to: function(url, force) {
+            var url_tmp = document.createElement('a');
+            url_tmp.href = url;
+            if('pushState' in window.history && location.hostname === url_tmp.hostname) {
+                if(force) {
+                    return history.replaceState({}, null, url);
+                }
+                return history.pushState({}, null, url);
+            }
+            window.location.href = url;
+        },
+
         error: function(msg) {
             throw new Error( msg );
         },
@@ -923,12 +915,6 @@ if(!Array.prototype.remove) {
         });
     }
 
-    var strundefined = typeof undefined;
+    window.routerJS = window.RJS = routerJS;
 
-    if ( typeof noGlobal === strundefined ) {
-        window.routerJS = window.RJS = routerJS;
-    }
-
-    return routerJS;
-
-}));
+})();
