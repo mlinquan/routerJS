@@ -351,11 +351,11 @@ if(!Array.prototype.remove) {
             this.config.revSuffix = new RegExp(this.config.revSuffix);
             var onStartFun = this.config.onStart;
 
-            if(routerJS.history && !window._historyPushState && ('pushState' in history) && window.History) {
-                window._historyPushState = History.prototype.pushState;
-                window._historyReplaceState = History.prototype.replaceState;
+            if(routerJS.history && !window._historyPushState && ('pushState' in history)) {
+                window._historyPushState = (window.History && History.prototype.pushState) || history.pushState;
+                window._historyReplaceState = (window.History && History.prototype.replaceState) || history.replaceState;
 
-                History.prototype.pushState = function(state, title, url) {
+                history.pushState = function(state, title, url) {
                     if(routerJS.changeUrl(url).hash) {
                         return false;
                     }
@@ -368,7 +368,7 @@ if(!Array.prototype.remove) {
                     return routerJS.load();
                 };
 
-                History.prototype.replaceState = function(state, title, url) {
+                history.replaceState = function(state, title, url) {
                     if(routerJS.changeUrl(url).hash) {
                         return false;
                     }
