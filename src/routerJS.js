@@ -482,6 +482,7 @@ if(!Array.prototype.remove) {
             var revSuffix = this.config.revSuffix;
             var libs = this.libs;
             var prefix = this.config.prefix;
+            this.config.thisPage = {};
             var thisRoute = this.config.thisPage;
 
             thisTimeUse = {};
